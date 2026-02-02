@@ -8,6 +8,101 @@ chrome.action.onClicked.addListener((tab) => {
 // Set side panel to open on the left (if supported)
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
+// Log when service worker starts
+console.log('Tab Saver background service worker started');
+
+// Handle timer alarms
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  console.log('=== ALARM FIRED ===');
+  console.log('Alarm name:', alarm.name);
+  console.log('Alarm time:', new Date(alarm.scheduledTime));
+
+  if (alarm.name.startsWith('timer-')) {
+    const tabId = parseFloat(alarm.name.replace('timer-', ''));
+
+    // Get the timed tab info
+    const result = await chrome.storage.sync.get(['timedTabs']);
+    const timedTabs = result.timedTabs || [];
+    const timedTab = timedTabs.find(t => t.id === tabId);
+
+    console.log('All timed tabs:', timedTabs);
+    console.log('Looking for tab ID:', tabId);
+    console.log('Timer tab found:', timedTab);
+
+    if (timedTab) {
+      console.log('Creating notification for:', timedTab.title);
+      // Show notification - use extension icon (favicon URLs don't work reliably)
+      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+
+      try {
+        chrome.notifications.create(`timer-notification-${tabId}`, {
+          type: 'basic',
+          iconUrl: iconUrl,
+          title: 'Timer Complete!',
+          message: timedTab.title || 'Your timer has finished',
+          priority: 2,
+          requireInteraction: true
+        }, (notificationId) => {
+          if (chrome.runtime.lastError) {
+            console.error('Notification error:', chrome.runtime.lastError);
+          } else {
+            console.log('Notification created:', notificationId);
+          }
+        });
+      } catch (e) {
+        console.error('Failed to create notification:', e);
+      }
+    }
+  }
+});
+
+// Handle notification button clicks (note: buttons may not work on all platforms like macOS)
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+  if (notificationId.startsWith('timer-notification-') || notificationId.startsWith('timer-sidepanel-')) {
+    const prefix = notificationId.startsWith('timer-notification-') ? 'timer-notification-' : 'timer-sidepanel-';
+    const tabId = parseFloat(notificationId.replace(prefix, ''));
+
+    if (buttonIndex === 0) {
+      // Open Tab button clicked
+      const result = await chrome.storage.sync.get(['timedTabs']);
+      const timedTabs = result.timedTabs || [];
+      const timedTab = timedTabs.find(t => t.id === tabId);
+
+      if (timedTab) {
+        await chrome.tabs.create({ url: timedTab.url });
+      }
+    }
+
+    // Clear the notification
+    chrome.notifications.clear(notificationId);
+
+    // Remove from timed tabs
+    const result = await chrome.storage.sync.get(['timedTabs']);
+    let timedTabs = result.timedTabs || [];
+    timedTabs = timedTabs.filter(t => t.id !== tabId);
+    await chrome.storage.sync.set({ timedTabs });
+  }
+});
+
+// Handle notification click (clicking the notification body)
+chrome.notifications.onClicked.addListener(async (notificationId) => {
+  // Handle both timer-notification- and timer-sidepanel- prefixes
+  if (notificationId.startsWith('timer-notification-') || notificationId.startsWith('timer-sidepanel-')) {
+    const prefix = notificationId.startsWith('timer-notification-') ? 'timer-notification-' : 'timer-sidepanel-';
+    const tabId = parseFloat(notificationId.replace(prefix, ''));
+
+    const result = await chrome.storage.sync.get(['timedTabs']);
+    const timedTabs = result.timedTabs || [];
+    const timedTab = timedTabs.find(t => t.id === tabId);
+
+    if (timedTab) {
+      await chrome.tabs.create({ url: timedTab.url });
+    }
+
+    chrome.notifications.clear(notificationId);
+  }
+});
+
 // Duplicate tab prevention - when a tab is created, check if same URL exists
 chrome.tabs.onCreated.addListener(async (newTab) => {
   // Wait a moment for the tab URL to be set

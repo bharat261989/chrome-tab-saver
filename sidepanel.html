@@ -65,9 +65,59 @@
 
     <div class="section">
       <div class="section-header">
-        <h2>Reminders</h2>
+        <h2>Timed Tabs</h2>
+        <button id="testNotification" class="btn btn-small" title="Test notification">Test Notif</button>
+        <button id="testAlarm" class="btn btn-small" title="Test 5s alarm">Test Alarm</button>
       </div>
-      <div id="remindersList" class="tabs-list"></div>
+      <div id="timedTabsList" class="tabs-list"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h2>Due Soon</h2>
+      </div>
+      <div id="dueSoonList" class="due-soon-container">
+        <div class="due-soon-category" data-category="overdue">
+          <div class="category-header">
+            <span class="category-icon">⚠️</span>
+            <span class="category-name">Overdue</span>
+            <span class="category-count" id="overdueCount">0</span>
+          </div>
+          <div class="category-tabs" id="overdueList"></div>
+        </div>
+        <div class="due-soon-category" data-category="today">
+          <div class="category-header">
+            <span class="category-icon">📅</span>
+            <span class="category-name">Today</span>
+            <span class="category-count" id="todayCount">0</span>
+          </div>
+          <div class="category-tabs" id="todayList"></div>
+        </div>
+        <div class="due-soon-category" data-category="tomorrow">
+          <div class="category-header">
+            <span class="category-icon">🌅</span>
+            <span class="category-name">Tomorrow</span>
+            <span class="category-count" id="tomorrowCount">0</span>
+          </div>
+          <div class="category-tabs" id="tomorrowList"></div>
+        </div>
+        <div class="due-soon-category" data-category="thisWeek">
+          <div class="category-header">
+            <span class="category-icon">📆</span>
+            <span class="category-name">This Week</span>
+            <span class="category-count" id="thisWeekCount">0</span>
+          </div>
+          <div class="category-tabs" id="thisWeekList"></div>
+        </div>
+        <div class="due-soon-category" data-category="later">
+          <div class="category-header">
+            <span class="category-icon">📋</span>
+            <span class="category-name">Later</span>
+            <span class="category-count" id="laterCount">0</span>
+          </div>
+          <div class="category-tabs" id="laterList"></div>
+        </div>
+      </div>
     </div>
 
     <div class="section">
@@ -117,6 +167,8 @@
     <button class="context-item" data-action="removeFromDaily">Remove from Daily</button>
     <button class="context-item" data-action="setReminder">Set Reminder</button>
     <button class="context-item" data-action="removeReminder">Remove Reminder</button>
+    <button class="context-item" data-action="setTimer">Set Timer</button>
+    <button class="context-item" data-action="removeTimer">Remove Timer</button>
     <button class="context-item" data-action="moveToGroup">Move to Group</button>
     <button class="context-item" data-action="delete">Delete</button>
   </div>
@@ -125,10 +177,39 @@
   <div id="reminderModal" class="modal hidden">
     <div class="modal-content">
       <h3>Set Reminder</h3>
-      <input type="datetime-local" id="reminderInput">
+      <div class="reminder-inputs">
+        <label class="input-label">Date</label>
+        <input type="date" id="reminderDateInput">
+        <label class="input-label">Time (optional)</label>
+        <input type="time" id="reminderTimeInput" placeholder="Optional">
+      </div>
       <div class="modal-actions">
         <button id="cancelReminder" class="btn btn-secondary">Cancel</button>
         <button id="saveReminder" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timer Modal -->
+  <div id="timerModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Set Timer</h3>
+      <div class="timer-inputs">
+        <div class="timer-picker">
+          <div class="timer-field">
+            <label>Hours</label>
+            <input type="number" id="timerHours" min="0" max="23" value="0">
+          </div>
+          <span class="timer-separator">:</span>
+          <div class="timer-field">
+            <label>Minutes</label>
+            <input type="number" id="timerMinutes" min="0" max="59" value="30">
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="cancelTimer" class="btn btn-secondary">Cancel</button>
+        <button id="saveTimer" class="btn btn-primary">Start Timer</button>
       </div>
     </div>
   </div>

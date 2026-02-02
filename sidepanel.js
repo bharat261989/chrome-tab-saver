@@ -1,18 +1,25 @@
 // Tab Saver - Side Panel JavaScript
 
+// Default favicon placeholder
+const DEFAULT_FAVICON = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect fill=%22%23ddd%22 width=%2216%22 height=%2216%22 rx=%222%22/></svg>';
+
 // State
 let savedTabs = [];
 let groups = [];
 let dailyTabs = [];
 let pinnedTabs = [];
+let timedTabs = [];
 let selectedTab = null;
+let timerIntervals = {}; // Track active timer intervals
 
 // DOM Elements (initialized after DOM loads)
 let searchInput, saveCurrentTabBtn, pickFromWindowBtn, pickFromAllWindowsBtn, openDailyTabsBtn;
 let tabPickerModal, tabPickerList, selectAllTabsBtn, deselectAllTabsBtn, saveSelectedTabsBtn, cancelPickerBtn;
 let createGroupBtn, pinnedTabsList, openPinnedTabsBtn, dailyTabsList, groupsList, savedTabsList, currentTabsList;
 let groupModal, modalTitle, groupNameInput, saveGroupBtn, cancelGroupBtn, contextMenu;
-let remindersList, reminderModal, reminderInput, saveReminderBtn, cancelReminderBtn;
+let reminderModal, reminderDateInput, reminderTimeInput, saveReminderBtn, cancelReminderBtn;
+let timedTabsList, timerModal, timerHoursInput, timerMinutesInput, saveTimerBtn, cancelTimerBtn;
+let dueSoonContainer, overdueList, todayList, tomorrowList, thisWeekList, laterList;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
@@ -47,11 +54,27 @@ async function init() {
   cancelGroupBtn = document.getElementById('cancelGroup');
   contextMenu = document.getElementById('contextMenu');
 
-  remindersList = document.getElementById('remindersList');
   reminderModal = document.getElementById('reminderModal');
-  reminderInput = document.getElementById('reminderInput');
+  reminderDateInput = document.getElementById('reminderDateInput');
+  reminderTimeInput = document.getElementById('reminderTimeInput');
   saveReminderBtn = document.getElementById('saveReminder');
   cancelReminderBtn = document.getElementById('cancelReminder');
+
+  // Timed tabs elements
+  timedTabsList = document.getElementById('timedTabsList');
+  timerModal = document.getElementById('timerModal');
+  timerHoursInput = document.getElementById('timerHours');
+  timerMinutesInput = document.getElementById('timerMinutes');
+  saveTimerBtn = document.getElementById('saveTimer');
+  cancelTimerBtn = document.getElementById('cancelTimer');
+
+  // Due Soon elements
+  dueSoonContainer = document.getElementById('dueSoonList');
+  overdueList = document.getElementById('overdueList');
+  todayList = document.getElementById('todayList');
+  tomorrowList = document.getElementById('tomorrowList');
+  thisWeekList = document.getElementById('thisWeekList');
+  laterList = document.getElementById('laterList');
 
   await loadData();
   renderAll();
@@ -80,6 +103,10 @@ function setupStorageChangeListener() {
       if (changes.dailyTabs) {
         dailyTabs = changes.dailyTabs.newValue || [];
         renderDailyTabs();
+      }
+      if (changes.timedTabs) {
+        timedTabs = changes.timedTabs.newValue || [];
+        renderTimedTabs();
       }
     }
   });
@@ -117,15 +144,16 @@ function setupTabChangeListeners() {
 
 // Data Management
 async function loadData() {
-  const result = await chrome.storage.sync.get(['savedTabs', 'groups', 'dailyTabs', 'pinnedTabs']);
+  const result = await chrome.storage.sync.get(['savedTabs', 'groups', 'dailyTabs', 'pinnedTabs', 'timedTabs']);
   savedTabs = result.savedTabs || [];
   groups = result.groups || [];
   dailyTabs = result.dailyTabs || [];
   pinnedTabs = result.pinnedTabs || [];
+  timedTabs = result.timedTabs || [];
 }
 
 async function saveData() {
-  await chrome.storage.sync.set({ savedTabs, groups, dailyTabs, pinnedTabs });
+  await chrome.storage.sync.set({ savedTabs, groups, dailyTabs, pinnedTabs, timedTabs });
 }
 
 // Event Listeners
@@ -173,6 +201,97 @@ function setupEventListeners() {
   reminderModal.addEventListener('click', (e) => {
     if (e.target === reminderModal) hideReminderModal();
   });
+
+  // Timer modal
+  saveTimerBtn.addEventListener('click', handleSaveTimer);
+  cancelTimerBtn.addEventListener('click', hideTimerModal);
+  timerModal.addEventListener('click', (e) => {
+    if (e.target === timerModal) hideTimerModal();
+  });
+
+  // Test notification button
+  document.getElementById('testNotification').addEventListener('click', testNotification);
+  document.getElementById('testAlarm').addEventListener('click', testAlarm);
+
+  // Setup category toggle listeners
+  setupCategoryToggleListeners();
+}
+
+// Test notification function
+function testNotification() {
+  console.log('Testing notification...');
+
+  // Check if notifications permission exists
+  if (!chrome.notifications) {
+    alert('chrome.notifications API not available!\n\nMake sure "notifications" is in manifest.json permissions.');
+    return;
+  }
+
+  // Try with extension icon first
+  const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+  console.log('Icon URL:', iconUrl);
+
+  // Also try getting permission status
+  chrome.notifications.getPermissionLevel((level) => {
+    console.log('Notification permission level:', level);
+
+    if (level !== 'granted') {
+      alert('Notification permission not granted!\nLevel: ' + level + '\n\nCheck Chrome settings > Privacy > Notifications');
+      return;
+    }
+
+    chrome.notifications.create('test-notification-' + Date.now(), {
+      type: 'basic',
+      iconUrl: iconUrl,
+      title: 'Test Notification',
+      message: 'If you see this, notifications are working!',
+      priority: 2
+    }, (notificationId) => {
+      if (chrome.runtime.lastError) {
+        console.error('Notification error:', chrome.runtime.lastError);
+        alert('Notification failed: ' + chrome.runtime.lastError.message);
+      } else {
+        console.log('Test notification created:', notificationId);
+        alert('Notification created with ID: ' + notificationId + '\n\nCheck:\n1. System notification center\n2. Chrome notification area\n3. Do Not Disturb is OFF');
+      }
+    });
+  });
+}
+
+// Test alarm function - creates a 5 second alarm
+function testAlarm() {
+  console.log('Creating test alarm for 5 seconds...');
+
+  // Create a test timed tab entry
+  const testTab = {
+    id: Date.now(),
+    title: 'Test Alarm Tab',
+    url: 'https://example.com',
+    favicon: '',
+    timerEnd: Date.now() + 5000,
+    timerDuration: 5000
+  };
+
+  // Add to timed tabs
+  timedTabs.push(testTab);
+  saveData();
+
+  // Create alarm - note: Chrome alarms have minimum ~1 minute in production
+  // But we'll try with delayInMinutes for shorter delay
+  const alarmName = `timer-${testTab.id}`;
+
+  chrome.alarms.create(alarmName, {
+    when: Date.now() + 5000  // 5 seconds from now
+  });
+
+  // Also list all alarms
+  chrome.alarms.getAll((alarms) => {
+    console.log('All alarms:', alarms);
+  });
+
+  alert('Test alarm created!\n\nAlarm name: ' + alarmName + '\nShould fire in 5 seconds.\n\nNote: Chrome alarms have ~1 min minimum delay.\nCheck background console for alarm events.');
+
+  renderTimedTabs();
 }
 
 // Save Tab Functions
@@ -228,10 +347,10 @@ function createPickerItemHTML(tab) {
   return `
     <div class="picker-item ${alreadySaved ? 'already-saved' : ''}" data-url="${escapeHtml(tab.url)}" data-title="${escapeHtml(tab.title)}" data-favicon="${tab.favIconUrl || ''}">
       <input type="checkbox" class="picker-checkbox" ${alreadySaved ? 'disabled' : ''}>
-      <img class="picker-favicon" src="${tab.favIconUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect fill=%22%23ddd%22 width=%2216%22 height=%2216%22 rx=%222%22/></svg>'}" alt="">
+      <img class="picker-favicon" src="${tab.favIconUrl || DEFAULT_FAVICON}" onerror="this.src='${DEFAULT_FAVICON}'" alt="">
       <div class="picker-info">
         <div class="picker-title">${escapeHtml(tab.title)}${alreadySaved ? ' (saved)' : ''}</div>
-        <div class="picker-url">${escapeHtml(new URL(tab.url).hostname)}</div>
+        <div class="picker-url">${escapeHtml(getHostname(tab.url))}</div>
       </div>
     </div>
   `;
@@ -403,20 +522,27 @@ function getGroupAndDescendants(groupId) {
 function showReminderModal(tabId) {
   reminderModal.dataset.tabId = tabId;
 
-  // Set default to tomorrow at 9 AM
+  // Set default to tomorrow
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(9, 0, 0, 0);
 
   const tab = savedTabs.find(t => t.id === tabId);
   if (tab && tab.reminder) {
-    reminderInput.value = new Date(tab.reminder).toISOString().slice(0, 16);
+    const reminderDate = new Date(tab.reminder);
+    reminderDateInput.value = reminderDate.toISOString().slice(0, 10);
+    // Only set time if it was explicitly set (not midnight)
+    if (reminderDate.getHours() !== 0 || reminderDate.getMinutes() !== 0) {
+      reminderTimeInput.value = reminderDate.toTimeString().slice(0, 5);
+    } else {
+      reminderTimeInput.value = '';
+    }
   } else {
-    reminderInput.value = tomorrow.toISOString().slice(0, 16);
+    reminderDateInput.value = tomorrow.toISOString().slice(0, 10);
+    reminderTimeInput.value = '';
   }
 
   reminderModal.classList.remove('hidden');
-  reminderInput.focus();
+  reminderDateInput.focus();
 }
 
 function hideReminderModal() {
@@ -426,13 +552,22 @@ function hideReminderModal() {
 
 function handleSaveReminder() {
   const tabId = parseFloat(reminderModal.dataset.tabId);
-  const reminder = reminderInput.value;
+  const dateValue = reminderDateInput.value;
+  const timeValue = reminderTimeInput.value;
 
-  if (!reminder) return;
+  if (!dateValue) return;
 
   const tab = savedTabs.find(t => t.id === tabId);
   if (tab) {
-    tab.reminder = new Date(reminder).toISOString();
+    let reminderDate;
+    if (timeValue) {
+      reminderDate = new Date(`${dateValue}T${timeValue}`);
+    } else {
+      // If no time specified, set to start of day (midnight)
+      reminderDate = new Date(`${dateValue}T00:00:00`);
+    }
+    tab.reminder = reminderDate.toISOString();
+    tab.hasTime = !!timeValue; // Track if time was explicitly set
     saveData();
     renderAll();
   }
@@ -444,9 +579,80 @@ function removeReminder(tabId) {
   const tab = savedTabs.find(t => t.id === tabId);
   if (tab) {
     delete tab.reminder;
+    delete tab.hasTime;
     saveData();
     renderAll();
   }
+}
+
+// Timer functions
+function showTimerModal(tabId) {
+  timerModal.dataset.tabId = tabId;
+  timerHoursInput.value = 0;
+  timerMinutesInput.value = 30;
+  timerModal.classList.remove('hidden');
+  timerMinutesInput.focus();
+}
+
+function hideTimerModal() {
+  timerModal.classList.add('hidden');
+  timerModal.dataset.tabId = '';
+}
+
+function handleSaveTimer() {
+  const tabId = parseFloat(timerModal.dataset.tabId);
+  const hours = parseInt(timerHoursInput.value) || 0;
+  const minutes = parseInt(timerMinutesInput.value) || 0;
+
+  if (hours === 0 && minutes === 0) return;
+
+  const tab = savedTabs.find(t => t.id === tabId);
+  if (tab) {
+    const durationMs = (hours * 60 + minutes) * 60 * 1000;
+    const endTime = Date.now() + durationMs;
+
+    // Add to timed tabs
+    const timedTab = {
+      ...tab,
+      timerEnd: endTime,
+      timerDuration: durationMs
+    };
+
+    // Remove existing timer for this tab if any
+    timedTabs = timedTabs.filter(t => t.id !== tabId);
+    timedTabs.push(timedTab);
+
+    // Create chrome alarm for notification
+    chrome.alarms.create(`timer-${tabId}`, { when: endTime }, () => {
+      console.log(`Alarm created: timer-${tabId}, will fire at:`, new Date(endTime));
+    });
+
+    saveData();
+    renderAll();
+  }
+
+  hideTimerModal();
+}
+
+function removeTimer(tabId) {
+  timedTabs = timedTabs.filter(t => t.id !== tabId);
+  chrome.alarms.clear(`timer-${tabId}`);
+  if (timerIntervals[tabId]) {
+    clearInterval(timerIntervals[tabId]);
+    delete timerIntervals[tabId];
+  }
+  saveData();
+  renderAll();
+}
+
+// Category toggle for Due Soon
+function setupCategoryToggleListeners() {
+  document.querySelectorAll('.category-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const category = header.closest('.due-soon-category');
+      category.classList.toggle('collapsed');
+    });
+  });
 }
 
 function toggleGroup(groupId) {
@@ -477,6 +683,15 @@ function handleSearch() {
 function deleteTab(tabId) {
   savedTabs = savedTabs.filter(t => t.id !== tabId);
   dailyTabs = dailyTabs.filter(t => t.id !== tabId);
+  // Also remove from timed tabs and clear alarm
+  if (timedTabs.some(t => t.id === tabId)) {
+    timedTabs = timedTabs.filter(t => t.id !== tabId);
+    chrome.alarms.clear(`timer-${tabId}`);
+    if (timerIntervals[tabId]) {
+      clearInterval(timerIntervals[tabId]);
+      delete timerIntervals[tabId];
+    }
+  }
   saveData();
   renderAll();
 }
@@ -517,6 +732,7 @@ function showContextMenu(e, tab) {
   const isDaily = dailyTabs.some(t => t.id === tab.id);
   const isPinned = pinnedTabs.some(t => t.id === tab.id);
   const hasReminder = tab.reminder != null;
+  const hasTimer = timedTabs.some(t => t.id === tab.id);
 
   // Show/hide relevant menu items
   const addToDailyItem = contextMenu.querySelector('[data-action="addToDaily"]');
@@ -525,6 +741,8 @@ function showContextMenu(e, tab) {
   const unpinTabItem = contextMenu.querySelector('[data-action="unpinTab"]');
   const setReminderItem = contextMenu.querySelector('[data-action="setReminder"]');
   const removeReminderItem = contextMenu.querySelector('[data-action="removeReminder"]');
+  const setTimerItem = contextMenu.querySelector('[data-action="setTimer"]');
+  const removeTimerItem = contextMenu.querySelector('[data-action="removeTimer"]');
 
   addToDailyItem.style.display = isDaily ? 'none' : 'block';
   removeFromDailyItem.style.display = isDaily ? 'block' : 'none';
@@ -532,6 +750,8 @@ function showContextMenu(e, tab) {
   unpinTabItem.style.display = isPinned ? 'block' : 'none';
   setReminderItem.style.display = hasReminder ? 'none' : 'block';
   removeReminderItem.style.display = hasReminder ? 'block' : 'none';
+  setTimerItem.style.display = hasTimer ? 'none' : 'block';
+  removeTimerItem.style.display = hasTimer ? 'block' : 'none';
 
   contextMenu.style.left = `${e.pageX}px`;
   contextMenu.style.top = `${e.pageY}px`;
@@ -575,6 +795,12 @@ function handleContextMenuAction(e) {
     case 'removeReminder':
       removeReminder(selectedTab.id);
       break;
+    case 'setTimer':
+      showTimerModal(selectedTab.id);
+      break;
+    case 'removeTimer':
+      removeTimer(selectedTab.id);
+      break;
     case 'delete':
       deleteTab(selectedTab.id);
       break;
@@ -603,7 +829,8 @@ function renderAll(searchQuery) {
   const query = getSearchQuery(searchQuery);
   renderPinnedTabs(query);
   renderDailyTabs(query);
-  renderReminders(query);
+  renderTimedTabs(query);
+  renderDueSoon(query);
   renderGroups(query);
   renderSavedTabs(query);
   renderCurrentTabs(query);
@@ -619,12 +846,14 @@ function getSearchQuery(searchQuery) {
 function renderPinnedTabs(searchQuery) {
   const query = getSearchQuery(searchQuery);
   const filtered = filterTabs(pinnedTabs, query);
+  const section = pinnedTabsList.closest('.section');
 
   if (filtered.length === 0) {
-    pinnedTabsList.innerHTML = '<div class="empty-state">No pinned tabs. Right-click a tab to pin it.</div>';
+    section.style.display = 'none';
     return;
   }
 
+  section.style.display = 'block';
   pinnedTabsList.innerHTML = filtered.map(tab => createPinnedTabHTML(tab)).join('');
   attachTabListeners(pinnedTabsList);
   attachPinnedTabListeners(pinnedTabsList);
@@ -645,10 +874,10 @@ function createPinnedTabHTML(tab) {
   return `
     <div class="tab-item pinned-tab" data-tab-id="${tab.id}" data-url="${escapeHtml(tab.url)}">
       <span class="pin-icon">📌</span>
-      <img class="tab-favicon" src="${tab.favicon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect fill=%22%23ddd%22 width=%2216%22 height=%2216%22 rx=%222%22/></svg>'}" alt="">
+      <img class="tab-favicon" src="${tab.favicon || DEFAULT_FAVICON}" onerror="this.src='${DEFAULT_FAVICON}'" alt="">
       <div class="tab-info">
         <div class="tab-title">${escapeHtml(tab.title)}</div>
-        <div class="tab-url">${escapeHtml(new URL(tab.url).hostname)}</div>
+        <div class="tab-url">${escapeHtml(getHostname(tab.url))}</div>
       </div>
       <div class="tab-actions">
         <button class="tab-action-btn tab-open" title="Open">↗</button>
@@ -684,33 +913,342 @@ async function openAllPinnedTabs() {
 function renderDailyTabs(searchQuery) {
   const query = getSearchQuery(searchQuery);
   const filtered = filterTabs(dailyTabs, query);
+  const section = dailyTabsList.closest('.section');
 
   if (filtered.length === 0) {
-    dailyTabsList.innerHTML = '<div class="empty-state">No daily tabs. Right-click a tab to add it.</div>';
+    section.style.display = 'none';
     return;
   }
 
+  section.style.display = 'block';
   dailyTabsList.innerHTML = filtered.map(tab => createTabHTML(tab, true)).join('');
   attachTabListeners(dailyTabsList);
 }
 
-function renderReminders(searchQuery) {
+// Timed Tabs
+function renderTimedTabs(searchQuery) {
   const query = getSearchQuery(searchQuery);
-  // Get all tabs with reminders, sorted by reminder time
-  const tabsWithReminders = savedTabs
-    .filter(t => t.reminder)
-    .sort((a, b) => new Date(a.reminder) - new Date(b.reminder));
-
-  const filtered = filterTabs(tabsWithReminders, query);
+  const filtered = filterTabs(timedTabs, query);
+  const section = timedTabsList.closest('.section');
 
   if (filtered.length === 0) {
-    remindersList.innerHTML = '<div class="empty-state">No reminders. Right-click a tab to set one.</div>';
+    section.style.display = 'none';
     return;
   }
 
-  remindersList.innerHTML = filtered.map(tab => createReminderTabHTML(tab)).join('');
-  attachTabListeners(remindersList);
-  attachReminderEditListeners(remindersList);
+  section.style.display = 'block';
+
+  // Sort by remaining time
+  const sorted = [...filtered].sort((a, b) => a.timerEnd - b.timerEnd);
+  timedTabsList.innerHTML = sorted.map(tab => createTimedTabHTML(tab)).join('');
+  attachTabListeners(timedTabsList);
+  attachTimedTabListeners(timedTabsList);
+
+  // Start countdown updates
+  startTimerCountdowns();
+}
+
+function startTimerCountdowns() {
+  // Clear existing intervals
+  Object.values(timerIntervals).forEach(clearInterval);
+  timerIntervals = {};
+
+  timedTabs.forEach(tab => {
+    updateTimerDisplay(tab.id);
+    timerIntervals[tab.id] = setInterval(() => {
+      updateTimerDisplay(tab.id);
+    }, 1000);
+  });
+}
+
+function updateTimerDisplay(tabId) {
+  const tab = timedTabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  const remaining = tab.timerEnd - Date.now();
+  const countdownEl = document.querySelector(`.timer-countdown[data-tab-id="${tabId}"]`);
+
+  if (!countdownEl) return;
+
+  if (remaining <= 0) {
+    countdownEl.textContent = 'Time up!';
+    countdownEl.classList.add('time-up');
+    if (timerIntervals[tabId]) {
+      clearInterval(timerIntervals[tabId]);
+      delete timerIntervals[tabId];
+    }
+    // Trigger notification from sidepanel as fallback
+    triggerTimerNotification(tab);
+  } else {
+    const hours = Math.floor(remaining / (1000 * 60 * 60));
+    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+    if (hours > 0) {
+      countdownEl.textContent = `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      countdownEl.textContent = `${minutes}m ${seconds}s`;
+    } else {
+      countdownEl.textContent = `${seconds}s`;
+    }
+  }
+}
+
+// Trigger notification when timer completes (fallback from sidepanel)
+function triggerTimerNotification(tab) {
+  // Check if we already notified for this tab
+  const timedTab = timedTabs.find(t => t.id === tab.id);
+  if (!timedTab || timedTab.notified) return;
+
+  // Mark as notified to prevent duplicate notifications
+  timedTab.notified = true;
+  saveData();
+
+  console.log('Triggering timer notification for:', tab.title);
+
+  // Create notification
+  const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+  chrome.notifications.create(`timer-sidepanel-${tab.id}`, {
+    type: 'basic',
+    iconUrl: iconUrl,
+    title: 'Timer Complete!',
+    message: tab.title || 'Your timer has finished',
+    priority: 2,
+    requireInteraction: true
+  }, (notificationId) => {
+    if (chrome.runtime.lastError) {
+      console.error('Notification error:', chrome.runtime.lastError);
+      // Fallback: show alert if notification fails
+      if (document.visibilityState === 'visible') {
+        alert(`Timer Complete!\n\n${tab.title}`);
+      }
+    } else {
+      console.log('Timer notification shown:', notificationId);
+    }
+  });
+}
+
+function createTimedTabHTML(tab) {
+  const remaining = tab.timerEnd - Date.now();
+  const isTimeUp = remaining <= 0;
+
+  return `
+    <div class="tab-item timed-tab ${isTimeUp ? 'time-up' : ''}" data-tab-id="${tab.id}" data-url="${escapeHtml(tab.url)}">
+      <span class="timer-icon">⏱️</span>
+      <img class="tab-favicon" src="${tab.favicon || DEFAULT_FAVICON}" onerror="this.src='${DEFAULT_FAVICON}'" alt="">
+      <div class="tab-info">
+        <div class="tab-title">${escapeHtml(tab.title)}</div>
+        <div class="timer-countdown ${isTimeUp ? 'time-up' : ''}" data-tab-id="${tab.id}">Loading...</div>
+      </div>
+      <div class="tab-actions">
+        <button class="tab-action-btn tab-open" title="Open">↗</button>
+        <button class="tab-action-btn tab-remove-timer" title="Remove timer">×</button>
+      </div>
+    </div>
+  `;
+}
+
+function attachTimedTabListeners(container) {
+  container.querySelectorAll('.tab-remove-timer').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tabItem = btn.closest('.tab-item');
+      const tabId = parseFloat(tabItem.dataset.tabId);
+      removeTimer(tabId);
+    });
+  });
+}
+
+// Due Soon (Reminders organized by time category)
+function renderDueSoon(searchQuery) {
+  const query = getSearchQuery(searchQuery);
+  const tabsWithReminders = savedTabs.filter(t => t.reminder);
+  const filtered = filterTabs(tabsWithReminders, query);
+  const section = dueSoonContainer.closest('.section');
+
+  // Hide section if no reminders at all
+  if (filtered.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  // Restore the category structure if it was replaced with empty state
+  if (!document.getElementById('overdueCount')) {
+    dueSoonContainer.innerHTML = `
+      <div class="due-soon-category" data-category="overdue">
+        <div class="category-header">
+          <span class="category-icon">⚠️</span>
+          <span class="category-name">Overdue</span>
+          <span class="category-count" id="overdueCount">0</span>
+        </div>
+        <div class="category-tabs" id="overdueList"></div>
+      </div>
+      <div class="due-soon-category" data-category="today">
+        <div class="category-header">
+          <span class="category-icon">📅</span>
+          <span class="category-name">Today</span>
+          <span class="category-count" id="todayCount">0</span>
+        </div>
+        <div class="category-tabs" id="todayList"></div>
+      </div>
+      <div class="due-soon-category" data-category="tomorrow">
+        <div class="category-header">
+          <span class="category-icon">🌅</span>
+          <span class="category-name">Tomorrow</span>
+          <span class="category-count" id="tomorrowCount">0</span>
+        </div>
+        <div class="category-tabs" id="tomorrowList"></div>
+      </div>
+      <div class="due-soon-category" data-category="thisWeek">
+        <div class="category-header">
+          <span class="category-icon">📆</span>
+          <span class="category-name">This Week</span>
+          <span class="category-count" id="thisWeekCount">0</span>
+        </div>
+        <div class="category-tabs" id="thisWeekList"></div>
+      </div>
+      <div class="due-soon-category" data-category="later">
+        <div class="category-header">
+          <span class="category-icon">📋</span>
+          <span class="category-name">Later</span>
+          <span class="category-count" id="laterCount">0</span>
+        </div>
+        <div class="category-tabs" id="laterList"></div>
+      </div>
+    `;
+    // Re-setup category toggle listeners
+    setupCategoryToggleListeners();
+    // Re-cache the DOM elements
+    overdueList = document.getElementById('overdueList');
+    todayList = document.getElementById('todayList');
+    tomorrowList = document.getElementById('tomorrowList');
+    thisWeekList = document.getElementById('thisWeekList');
+    laterList = document.getElementById('laterList');
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayAfterTomorrow = new Date(today);
+  dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+  const endOfWeek = new Date(today);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  // Categorize tabs
+  const overdue = [];
+  const todayTabs = [];
+  const tomorrowTabs = [];
+  const thisWeekTabs = [];
+  const later = [];
+
+  filtered.forEach(tab => {
+    const reminderDate = new Date(tab.reminder);
+    if (reminderDate < now) {
+      overdue.push(tab);
+    } else if (reminderDate < tomorrow) {
+      todayTabs.push(tab);
+    } else if (reminderDate < dayAfterTomorrow) {
+      tomorrowTabs.push(tab);
+    } else if (reminderDate < endOfWeek) {
+      thisWeekTabs.push(tab);
+    } else {
+      later.push(tab);
+    }
+  });
+
+  // Sort each category by time
+  const sortByReminder = (a, b) => new Date(a.reminder) - new Date(b.reminder);
+  overdue.sort(sortByReminder);
+  todayTabs.sort(sortByReminder);
+  tomorrowTabs.sort(sortByReminder);
+  thisWeekTabs.sort(sortByReminder);
+  later.sort(sortByReminder);
+
+  // Update counts
+  document.getElementById('overdueCount').textContent = overdue.length;
+  document.getElementById('todayCount').textContent = todayTabs.length;
+  document.getElementById('tomorrowCount').textContent = tomorrowTabs.length;
+  document.getElementById('thisWeekCount').textContent = thisWeekTabs.length;
+  document.getElementById('laterCount').textContent = later.length;
+
+  // Render each category
+  renderCategoryTabs(overdueList, overdue, 'overdue');
+  renderCategoryTabs(todayList, todayTabs, 'today');
+  renderCategoryTabs(tomorrowList, tomorrowTabs, 'tomorrow');
+  renderCategoryTabs(thisWeekList, thisWeekTabs, 'thisWeek');
+  renderCategoryTabs(laterList, later, 'later');
+
+  // Show/hide empty categories
+  document.querySelector('[data-category="overdue"]').style.display = overdue.length ? 'block' : 'none';
+  document.querySelector('[data-category="today"]').style.display = todayTabs.length ? 'block' : 'none';
+  document.querySelector('[data-category="tomorrow"]').style.display = tomorrowTabs.length ? 'block' : 'none';
+  document.querySelector('[data-category="thisWeek"]').style.display = thisWeekTabs.length ? 'block' : 'none';
+  document.querySelector('[data-category="later"]').style.display = later.length ? 'block' : 'none';
+}
+
+function renderCategoryTabs(container, tabs, category) {
+  if (tabs.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = tabs.map(tab => createDueSoonTabHTML(tab, category)).join('');
+  attachTabListeners(container);
+  attachReminderEditListeners(container);
+}
+
+function createDueSoonTabHTML(tab, category) {
+  const reminder = new Date(tab.reminder);
+  const isOverdue = category === 'overdue';
+
+  let reminderText;
+  if (tab.hasTime) {
+    // Show time if it was explicitly set
+    if (category === 'overdue') {
+      reminderText = reminder.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+                     reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (category === 'today' || category === 'tomorrow') {
+      reminderText = reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (category === 'thisWeek') {
+      reminderText = reminder.toLocaleDateString([], { weekday: 'short' }) + ' ' +
+                     reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      reminderText = reminder.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+                     reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+  } else {
+    // No time set, just show date info
+    if (category === 'overdue') {
+      reminderText = reminder.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } else if (category === 'today') {
+      reminderText = 'All day';
+    } else if (category === 'tomorrow') {
+      reminderText = 'All day';
+    } else if (category === 'thisWeek') {
+      reminderText = reminder.toLocaleDateString([], { weekday: 'long' });
+    } else {
+      reminderText = reminder.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+  }
+
+  return `
+    <div class="tab-item reminder-tab ${isOverdue ? 'overdue' : ''}" data-tab-id="${tab.id}" data-url="${escapeHtml(tab.url)}" draggable="true">
+      <span class="drag-handle">⋮⋮</span>
+      <img class="tab-favicon" src="${tab.favicon || DEFAULT_FAVICON}" onerror="this.src='${DEFAULT_FAVICON}'" alt="">
+      <div class="tab-info">
+        <div class="tab-title">${escapeHtml(tab.title)}</div>
+        <div class="tab-reminder-time ${isOverdue ? 'overdue' : ''}" data-tab-id="${tab.id}" title="Click to edit">${reminderText}</div>
+      </div>
+      <div class="tab-actions">
+        <button class="tab-action-btn tab-edit-reminder" title="Edit reminder">✎</button>
+        <button class="tab-action-btn tab-open" title="Open">↗</button>
+        <button class="tab-action-btn tab-delete" title="Delete">×</button>
+      </div>
+    </div>
+  `;
 }
 
 function attachReminderEditListeners(container) {
@@ -732,45 +1270,6 @@ function attachReminderEditListeners(container) {
       showReminderModal(tabId);
     });
   });
-}
-
-function createReminderTabHTML(tab) {
-  const reminder = new Date(tab.reminder);
-  const now = new Date();
-  const isOverdue = reminder < now;
-  const isToday = reminder.toDateString() === now.toDateString();
-
-  let reminderText;
-  const diffMs = reminder - now;
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (isOverdue) {
-    reminderText = 'Overdue';
-  } else if (isToday) {
-    reminderText = 'Today ' + reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (diffDays === 1) {
-    reminderText = 'Tomorrow ' + reminder.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (diffDays <= 7) {
-    reminderText = reminder.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-  } else {
-    reminderText = reminder.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
-
-  return `
-    <div class="tab-item reminder-tab ${isOverdue ? 'overdue' : ''}" data-tab-id="${tab.id}" data-url="${escapeHtml(tab.url)}" draggable="true">
-      <span class="drag-handle">⋮⋮</span>
-      <img class="tab-favicon" src="${tab.favicon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect fill=%22%23ddd%22 width=%2216%22 height=%2216%22 rx=%222%22/></svg>'}" alt="">
-      <div class="tab-info">
-        <div class="tab-title">${escapeHtml(tab.title)}</div>
-        <div class="tab-reminder-time ${isOverdue ? 'overdue' : ''}" data-tab-id="${tab.id}" title="Click to edit">${reminderText}</div>
-      </div>
-      <div class="tab-actions">
-        <button class="tab-action-btn tab-edit-reminder" title="Edit reminder">✎</button>
-        <button class="tab-action-btn tab-open" title="Open">↗</button>
-        <button class="tab-action-btn tab-delete" title="Delete">×</button>
-      </div>
-    </div>
-  `;
 }
 
 function renderGroups(searchQuery) {
@@ -1022,10 +1521,10 @@ function createCurrentTabHTML(tab) {
   const alreadySaved = savedTabs.some(t => t.url === tab.url);
   return `
     <div class="tab-item current-tab ${alreadySaved ? 'already-saved' : ''}" data-tab-id="${tab.id}" data-url="${escapeHtml(tab.url)}" data-title="${escapeHtml(tab.title)}" data-favicon="${tab.favIconUrl || ''}">
-      <img class="tab-favicon" src="${tab.favIconUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect fill=%22%23ddd%22 width=%2216%22 height=%2216%22 rx=%222%22/></svg>'}" alt="">
+      <img class="tab-favicon" src="${tab.favIconUrl || DEFAULT_FAVICON}" onerror="this.src='${DEFAULT_FAVICON}'" alt="">
       <div class="tab-info">
         <div class="tab-title">${escapeHtml(tab.title)}</div>
-        <div class="tab-url">${escapeHtml(new URL(tab.url).hostname)}</div>
+        <div class="tab-url">${escapeHtml(getHostname(tab.url))}</div>
       </div>
       <div class="tab-actions">
         ${alreadySaved
@@ -1081,10 +1580,10 @@ function createTabHTML(tab, isDaily = false) {
   return `
     <div class="tab-item ${isDaily ? 'daily' : ''}" data-tab-id="${tab.id}" data-url="${escapeHtml(tab.url)}" draggable="true">
       <span class="drag-handle">⋮⋮</span>
-      <img class="tab-favicon" src="${tab.favicon || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect fill=%22%23ddd%22 width=%2216%22 height=%2216%22 rx=%222%22/></svg>'}" alt="">
+      <img class="tab-favicon" src="${tab.favicon || DEFAULT_FAVICON}" onerror="this.src='${DEFAULT_FAVICON}'" alt="">
       <div class="tab-info">
         <div class="tab-title">${escapeHtml(tab.title)}</div>
-        <div class="tab-url">${escapeHtml(new URL(tab.url).hostname)}</div>
+        <div class="tab-url">${escapeHtml(getHostname(tab.url))}</div>
       </div>
       <div class="tab-actions">
         ${isDailyTab ? '<button class="tab-action-btn daily-indicator" title="Daily tab">★</button>' : ''}
@@ -1215,4 +1714,14 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Safely extract hostname from URL
+function getHostname(url) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
 }

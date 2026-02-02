@@ -726,3 +726,203 @@ body {
   outline: none;
   border-color: #0071e3;
 }
+
+/* Reminder inputs with separate date and time */
+.reminder-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.input-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #86868b;
+  margin-bottom: 4px;
+}
+
+.reminder-inputs input[type="date"],
+.reminder-inputs input[type="time"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.reminder-inputs input:focus {
+  outline: none;
+  border-color: #0071e3;
+}
+
+/* Timer Modal */
+.timer-inputs {
+  margin-bottom: 16px;
+}
+
+.timer-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.timer-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timer-field label {
+  font-size: 11px;
+  color: #86868b;
+  margin-bottom: 4px;
+}
+
+.timer-field input {
+  width: 70px;
+  padding: 12px;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.timer-field input:focus {
+  outline: none;
+  border-color: #0071e3;
+}
+
+.timer-separator {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1d1d1f;
+  padding-top: 20px;
+}
+
+/* Timed Tabs */
+.timed-tab {
+  background: #faf5ff;
+}
+
+.timed-tab:hover {
+  background: #f3e8ff;
+}
+
+.timed-tab.time-up {
+  background: #fef2f2;
+  animation: pulse 2s infinite;
+}
+
+.timed-tab.time-up:hover {
+  background: #fee2e2;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.timer-icon {
+  font-size: 14px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.timer-countdown {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.timer-countdown.time-up {
+  color: #dc2626;
+}
+
+/* Due Soon Categories */
+.due-soon-container {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.due-soon-category {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.due-soon-category:last-child {
+  border-bottom: none;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f9fafb;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.category-header:hover {
+  background: #f0f0f0;
+}
+
+.category-icon {
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.category-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.category-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: #86868b;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.due-soon-category[data-category="overdue"] .category-count {
+  background: #dc2626;
+}
+
+.due-soon-category[data-category="today"] .category-count {
+  background: #0071e3;
+}
+
+.due-soon-category[data-category="tomorrow"] .category-count {
+  background: #f59e0b;
+}
+
+.due-soon-category[data-category="thisWeek"] .category-count {
+  background: #10b981;
+}
+
+.category-tabs {
+  display: block;
+}
+
+.due-soon-category.collapsed .category-tabs {
+  display: none;
+}
+
+.category-tabs .tab-item {
+  border-radius: 0;
+}
+
+.category-tabs .tab-item:last-child {
+  border-bottom: none;
+}
