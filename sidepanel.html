@@ -9,7 +9,10 @@
 <body>
   <div class="container">
     <header class="header">
-      <h1>Tab Saver</h1>
+      <div class="header-top">
+        <h1>Tab Saver</h1>
+        <button id="settingsBtn" class="btn-icon" title="Settings">⚙️</button>
+      </div>
       <div class="search-box">
         <input type="text" id="searchInput" placeholder="Search tabs...">
       </div>
@@ -36,6 +39,15 @@
           <button id="deselectAllTabs" class="btn btn-small">Deselect All</button>
         </div>
         <div id="tabPickerList" class="tab-picker-list"></div>
+        <div class="picker-group-section">
+          <label class="input-label">Add to Group</label>
+          <select id="pickerGroupSelect">
+            <option value="">No Group</option>
+          </select>
+          <div id="pickerNewGroupInput" class="picker-new-group hidden">
+            <input type="text" id="pickerNewGroupName" placeholder="Enter new group name">
+          </div>
+        </div>
         <div class="modal-actions">
           <button id="cancelPicker" class="btn btn-secondary">Cancel</button>
           <button id="saveSelectedTabs" class="btn btn-primary">Save Selected</button>
@@ -214,6 +226,59 @@
     </div>
   </div>
 
-  <script src="sidepanel.js"></script>
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Settings</h3>
+      <div class="settings-section">
+        <label class="settings-label">Theme</label>
+        <div class="theme-options">
+          <label class="theme-option">
+            <input type="radio" name="theme" value="light">
+            <span class="theme-btn">☀️ Light</span>
+          </label>
+          <label class="theme-option">
+            <input type="radio" name="theme" value="dark">
+            <span class="theme-btn">🌙 Dark</span>
+          </label>
+          <label class="theme-option">
+            <input type="radio" name="theme" value="system">
+            <span class="theme-btn">💻 System</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="closeSettings" class="btn btn-primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript files loaded in dependency order -->
+  <!-- Core: Constants and State -->
+  <script src="js/constants.js"></script>
+  <script src="js/state.js"></script>
+
+  <!-- Utilities: Helper functions -->
+  <script src="js/utils.js"></script>
+  <script src="js/storage.js"></script>
+
+  <!-- Features: Theme (loads early to prevent flash) -->
+  <script src="js/theme.js"></script>
+
+  <!-- Features: Tab and Group Operations -->
+  <script src="js/tabs.js"></script>
+  <script src="js/groups.js"></script>
+  <script src="js/reminders.js"></script>
+  <script src="js/timers.js"></script>
+
+  <!-- UI: Rendering -->
+  <script src="js/render.js"></script>
+  <script src="js/picker.js"></script>
+  <script src="js/context-menu.js"></script>
+  <script src="js/drag-drop.js"></script>
+
+  <!-- Initialization -->
+  <script src="js/events.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
